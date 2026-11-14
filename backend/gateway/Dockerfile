@@ -1,22 +1,21 @@
-FROM node
+
+FROM node:22
 
 WORKDIR /app
 
-COPY package*json ./
+# Copy gateway dependencies
+COPY gateway/package*.json ./gateway/
 
+# Install dependencies inside gateway
+WORKDIR /app/gateway
 RUN npm install
 
-COPY ./gateway/package*json ./gateway/
-
-RUN npm install
-
-COPY gateway ./gateway 
-
+# Copy application code and shared folder
+WORKDIR /app
+COPY gateway ./gateway
 COPY shared ./shared
 
+# Start gateway
 WORKDIR /app/gateway
 
-EXPOSE 8000
-
-CMD [ "npm","start" ]
-
+CMD ["npm", "start"]
