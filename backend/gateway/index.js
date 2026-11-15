@@ -41,14 +41,13 @@ app.get("/api/warmup", async (req, res) => {
             }
 
             try {
-                // Any HTTP response means the service is responding.
                 const response = await fetch(url, {
-                    signal: AbortSignal.timeout(110000)
+                    signal: AbortSignal.timeout(120000)
                 })
 
                 return {
                     service: name,
-                    ready: true,
+                    ready: response.ok,
                     status: response.status
                 }
             } catch (error) {
