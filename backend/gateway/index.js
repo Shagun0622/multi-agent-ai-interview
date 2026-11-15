@@ -25,6 +25,50 @@ app.get("/" , (req,res)=>{
     res.send("Hello from Gateway")
 })
 
+app.get("/api/warmup", async (req, res) => {
+    const services = [
+        ["auth", process.env.AUTH_SERVICE_URL],
+        ["resume", process.env.RESUME_SERVICE_URL],
+        ["interview", process.env.INTERVIEW_SERVICE_URL],
+        ["roadmap", process.env.ROADMAP_SERVICE_URL],
+        ["billing", process.env.BILLING_SERVICE_URL]
+    ]
+
+    const results = await Promise.all(
+        services.map(async ([name, url]) => {
+            if (!url) {
+                return { service: name, ready: false, error: "URL missing" }
+            }
+
+            try {
+                // Any HTTP response means the service is responding.
+                const response = await fetch(url, {
+                    signal: AbortSignal.timeout(110000)
+                })
+
+                return {
+                    service: name,
+                    ready: true,
+                    status: response.status
+                }
+            } catch (error) {
+                return {
+                    service: name,
+                    ready: false,
+                    error: error.message
+                }
+            }
+        })
+    )
+
+    const allReady = results.every(service => service.ready)
+
+    res.status(allReady ? 200 : 503).json({
+        ready: allReady,
+        services: results
+    })
+})
+
 
 app.use("/api/auth" , proxy(process.env.AUTH_SERVICE_URL))
 app.use("/api/resume" ,isAuth, proxyWithHeaders(process.env.RESUME_SERVICE_URL))
