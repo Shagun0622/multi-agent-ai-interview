@@ -1,4 +1,5 @@
-import mongoose from "mongoose";
+import mongoose from "../../../shared/mongoose.js";
+import { databaseConnections } from "../../../shared/databaseConnections.js";
 
 const userSchema =
 new mongoose.Schema({
@@ -28,7 +29,7 @@ new mongoose.Schema({
 });
 
  const User =
-mongoose.model(
+databaseConnections.auth.model(
    "User",
    userSchema
 );

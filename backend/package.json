@@ -1,15 +1,36 @@
 {
-  "name": "backend",
+  "name": "interview-platform-backend",
   "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "",
+  "private": true,
   "type": "module",
-  "main": "index.js",
+  "main": "gateway/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon gateway/index.js",
+    "start": "node gateway/index.js",
+    "check": "node --check gateway/index.js",
+    "test": "node --test"
   },
   "dependencies": {
-    "ioredis": "^5.11.1"
+    "@langchain/core": "^1.2.5",
+    "@langchain/groq": "^1.3.1",
+    "@langchain/langgraph": "^1.4.9",
+    "axios": "^1.19.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "firebase-admin": "^14.0.0",
+    "ioredis": "^5.11.1",
+    "mongoose": "^9.9.2",
+    "morgan": "^1.11.0",
+    "multer": "^2.2.0",
+    "pdf-parse": "^2.4.5",
+    "razorpay": "^2.9.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

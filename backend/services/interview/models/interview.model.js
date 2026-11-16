@@ -1,4 +1,5 @@
-import mongoose from "mongoose";
+import mongoose from "../../../shared/mongoose.js";
+import { databaseConnections } from "../../../shared/databaseConnections.js";
 
 
 const feedbackSchema = new mongoose.Schema(
@@ -160,6 +161,6 @@ const interviewSchema = new mongoose.Schema(
     }
 );
 
-const Interview = mongoose.model("Interview" , interviewSchema)
+const Interview = databaseConnections.interview.model("Interview" , interviewSchema)
 
 export default Interview

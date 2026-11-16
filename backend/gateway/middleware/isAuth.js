@@ -17,6 +17,8 @@ export const isAuth = async (req,res,next) => {
         }
 
         req.user = JSON.parse(session);
+        // Preserve the identity header the Gateway previously injected upstream.
+        req.headers["x-user-id"] = String(req.user.userId);
 
         next();
 

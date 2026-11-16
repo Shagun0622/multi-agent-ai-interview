@@ -1,118 +1,102 @@
-import express from "express"
-import dotenv from "dotenv"
-dotenv.config()
-import proxy from "express-http-proxy"
-import cors from "cors"
-import morgan from "morgan"
-import cookieParser from "cookie-parser"
-import { getCurrentUser } from "./controllers/user.controller.js"
-import { isAuth } from "./middleware/isAuth.js"
-import { proxyWithHeaders } from "./utils/proxyWithHeaders.js"
-const app = express()
-app.use(express.json())
+// Load backend/.env before importing modules that create external clients.
+import "dotenv/config";
+
+import express from "express";
+import cors from "cors";
+import morgan from "morgan";
+import cookieParser from "cookie-parser";
+import { connectDatabases } from "./config/db.js";
+import { getCurrentUser } from "./controllers/user.controller.js";
+import { isAuth } from "./middleware/isAuth.js";
+import authRouter from "../services/auth/routes/auth.route.js";
+import resumeRouter from "../services/resume/routes/resume.route.js";
+import interviewRouter from "../services/interview/routes/interview.route.js";
+import roadmapRouter from "../services/roadmap/routes/roadmap.route.js";
+import billingRouter from "../services/billing/routes/billing.route.js";
+import redis, { closeRedis, connectRedis } from "../shared/redis/redis.js";
+import { closeDatabases, databaseConnections } from "../shared/databaseConnections.js";
+
+const app = express();
 
 app.use(cors({
-    origin:process.env.FRONTEND_URL,
-    credentials:true
-}))
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+}));
+app.use(morgan("dev"));
+app.use(express.json());
+app.use(cookieParser());
 
-app.use(morgan("dev"))
-app.use(cookieParser())
+const readiness = async () => {
+    const services = Object.entries(databaseConnections).map(([service, connection]) => ({
+        service: `${service}-mongodb`,
+        ready: connection.readyState === 1,
+    }));
+    const mongoReady = services.every(service => service.ready);
 
-const PORT = process.env.PORT || 6000
-
-app.get("/" , (req,res)=>{
-    res.send("Hello from Gateway")
-})
-
-
-
-app.get("/api/warmup", async (req, res) => {
-    const services = [
-        ["auth", process.env.AUTH_SERVICE_URL],
-        ["resume", process.env.RESUME_SERVICE_URL],
-        ["interview", process.env.INTERVIEW_SERVICE_URL],
-        ["roadmap", process.env.ROADMAP_SERVICE_URL],
-        ["billing", process.env.BILLING_SERVICE_URL]
-    ]
-
-    const wait = (ms) =>
-        new Promise(resolve => setTimeout(resolve, ms))
-
-    const checkService = async (name, url) => {
-        if (!url) {
-            return {
-                service: name,
-                ready: false,
-                error: "URL missing"
-            }
+    let redisReady = false;
+    let redisError;
+    try {
+        if (redis.status !== "ready") {
+            throw new Error(`Redis client is not ready (status: ${redis.status})`);
         }
-
-        let status = null
-        let error = null
-
-        for (let attempt = 1; attempt <= 6; attempt++) {
-            try {
-                const response = await fetch(url, {
-                    signal: AbortSignal.timeout(20000)
-                })
-
-                status = response.status
-
-                // 404 is acceptable: the service is reachable.
-                if (status < 500) {
-                    return {
-                        service: name,
-                        ready: true,
-                        status
-                    }
-                }
-
-                error = `HTTP ${status}`
-
-            } catch (err) {
-                error = err.message
-            }
-
-            if (attempt < 6) {
-                await wait(5000)
-            }
+        const response = await redis.ping();
+        if (response !== "PONG") {
+            throw new Error(`Redis PING returned an unexpected response (${String(response)})`);
         }
-
-        return {
-            service: name,
-            ready: false,
-            status,
-            error
-        }
+        redisReady = true;
+    } catch (error) {
+        const safeStack = String(error.stack || error)
+            .replace(/rediss?:\/\/[^\s\"'`]+/gi, "[Redis URL redacted]");
+        console.error("[readiness] Redis check failed:\n" + safeStack);
+        redisError = error.name || "connection error";
     }
+    services.push({
+        service: "redis",
+        ready: redisReady,
+        ...(!redisReady && { error: redisError }),
+    });
 
-    const results = await Promise.all(
-        services.map(([name, url]) => checkService(name, url))
-    )
+    return { ready: mongoReady && redisReady, services };
+};
 
-    const allReady = results.every(service => service.ready)
+app.get("/", (_req, res) => res.send("Unified Backend"));
+app.get("/health", async (_req, res) => {
+    const result = await readiness();
+    res.status(result.ready ? 200 : 503).json(result);
+});
 
-    res.status(allReady ? 200 : 503).json({
-        ready: allReady,
-        services: results
-    })
-})
+// Kept for the existing frontend startup check, now checking this process only.
+app.get("/api/warmup", async (_req, res) => {
+    const result = await readiness();
+    res.status(result.ready ? 200 : 503).json({
+        ready: result.ready,
+        services: [{ service: "unified-backend", ready: result.ready }, ...result.services],
+    });
+});
 
+app.use("/api/auth", authRouter);
+app.use("/api/resume", isAuth, resumeRouter);
+app.use("/api/interview", isAuth, interviewRouter);
+app.use("/api/roadmap", isAuth, roadmapRouter);
+app.use("/api/billing", isAuth, billingRouter);
+app.get("/api/me", isAuth, getCurrentUser);
 
+const startServer = async () => {
+    try {
+        await connectDatabases();
+        // Wait for TCP, TLS/AUTH, Redis readiness and a successful PING.
+        await connectRedis();
 
+        const PORT = process.env.PORT || 8000;
+        app.listen(PORT, () => {
+            console.log(`Unified Backend Started on ${PORT}`);
+        });
+    } catch (error) {
+        console.error("Unified backend startup failed:", error.message);
+        closeRedis();
+        await closeDatabases();
+        process.exitCode = 1;
+    }
+};
 
-app.use("/api/auth" , proxy(process.env.AUTH_SERVICE_URL))
-app.use("/api/resume" ,isAuth, proxyWithHeaders(process.env.RESUME_SERVICE_URL))
-app.use("/api/interview",isAuth ,proxyWithHeaders(process.env.INTERVIEW_SERVICE_URL))
-app.use("/api/roadmap",isAuth ,proxyWithHeaders(process.env.ROADMAP_SERVICE_URL))
-app.use("/api/billing",isAuth ,proxyWithHeaders(process.env.BILLING_SERVICE_URL))
-app.get("/api/me",isAuth,getCurrentUser)
-
-
-
-
-
-app.listen(PORT , ()=>{
-    console.log(`Gateway Started on ${PORT}`)
-})
+startServer();

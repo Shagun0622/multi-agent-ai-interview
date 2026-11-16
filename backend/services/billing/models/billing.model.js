@@ -1,4 +1,5 @@
-import mongoose from "mongoose";
+import mongoose from "../../../shared/mongoose.js";
+import { databaseConnections } from "../../../shared/databaseConnections.js";
 
 const billingSchema = new mongoose.Schema({
     userId: {
@@ -28,7 +29,7 @@ const billingSchema = new mongoose.Schema({
 },{timestamps:true})
 
 
-const Billing = mongoose.model("Billing",billingSchema)
+const Billing = databaseConnections.billing.model("Billing",billingSchema)
 
 
 export default Billing

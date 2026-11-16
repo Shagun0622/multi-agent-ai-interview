@@ -1,4 +1,5 @@
-import mongoose from "mongoose";
+import mongoose from "../../../shared/mongoose.js";
+import { databaseConnections } from "../../../shared/databaseConnections.js";
 
 const moduleSchema = new mongoose.Schema({
     title: {
@@ -73,6 +74,6 @@ const roadmapSchema = new mongoose.Schema({
 }, { timestamps: true })
 
 
-const Roadmap = mongoose.model("Roadmap",roadmapSchema)
+const Roadmap = databaseConnections.roadmap.model("Roadmap",roadmapSchema)
 
 export default Roadmap

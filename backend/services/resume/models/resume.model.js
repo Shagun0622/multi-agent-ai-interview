@@ -1,5 +1,6 @@
 
-import mongoose from "mongoose";
+import mongoose from "../../../shared/mongoose.js";
+import { databaseConnections } from "../../../shared/databaseConnections.js";
 
 const { Schema } = mongoose;
 
@@ -208,6 +209,6 @@ const resumeSchema = new Schema(
   { timestamps: true }
 );
 
-const Resume = mongoose.model("Resume", resumeSchema);
+const Resume = databaseConnections.resume.model("Resume", resumeSchema);
 
 export default Resume;
