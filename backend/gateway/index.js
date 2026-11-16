@@ -47,7 +47,7 @@ app.get("/api/warmup", async (req, res) => {
 
                 return {
                     service: name,
-                    ready: response.ok,
+                    ready: response.status < 500,
                     status: response.status
                 }
             } catch (error) {
