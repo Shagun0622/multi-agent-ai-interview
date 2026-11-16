@@ -30,32 +30,50 @@ function App() {
     const wait = (ms) =>
       new Promise(resolve => setTimeout(resolve, ms))
 
-    const warmupServices = async () => {
-      const maxAttempts = 12
+    
 
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-          const response = await fetch(
-            `${import.meta.env.VITE_BACKEND_URL}/api/warmup`,
-            { credentials: 'include' }
-          )
+const warmupServices = async () => {
+  const maxAttempts = 12
 
-          if (!response.ok) {
-            throw new Error('Services are still starting')
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 180000)
+
+      let response
+
+      try {
+        response = await fetch(
+          `${import.meta.env.VITE_BACKEND_URL}/api/warmup`,
+          {
+            credentials: 'include',
+            signal: controller.signal
           }
-
-          const result = await response.json()
-
-          if (result.ready) return true
-        } catch (error) {
-          console.log(`Warmup attempt ${attempt}:`, error.message)
-        }
-
-        await wait(10000)
+        )
+      } finally {
+        clearTimeout(timeout)
       }
 
-      return false
+      const result = await response.json()
+
+      console.log(`Warmup attempt ${attempt}:`, result.services)
+
+      if (result.ready && response.ok) {
+        return true
+      }
+    } catch (error) {
+      console.log(`Warmup attempt ${attempt}:`, error.message)
     }
+
+    if (attempt < maxAttempts) {
+      await wait(10000)
+    }
+  }
+
+  return false
+}
+
+
 
     const initializeApp = async () => {
       try {
