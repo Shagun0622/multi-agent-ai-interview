@@ -25,6 +25,8 @@ app.get("/" , (req,res)=>{
     res.send("Hello from Gateway")
 })
 
+
+
 app.get("/api/warmup", async (req, res) => {
     const services = [
         ["auth", process.env.AUTH_SERVICE_URL],
@@ -34,30 +36,59 @@ app.get("/api/warmup", async (req, res) => {
         ["billing", process.env.BILLING_SERVICE_URL]
     ]
 
-    const results = await Promise.all(
-        services.map(async ([name, url]) => {
-            if (!url) {
-                return { service: name, ready: false, error: "URL missing" }
-            }
+    const wait = (ms) =>
+        new Promise(resolve => setTimeout(resolve, ms))
 
+    const checkService = async (name, url) => {
+        if (!url) {
+            return {
+                service: name,
+                ready: false,
+                error: "URL missing"
+            }
+        }
+
+        let status = null
+        let error = null
+
+        for (let attempt = 1; attempt <= 6; attempt++) {
             try {
                 const response = await fetch(url, {
-                    signal: AbortSignal.timeout(120000)
+                    signal: AbortSignal.timeout(20000)
                 })
 
-                return {
-                    service: name,
-                    ready: response.status < 500,
-                    status: response.status
+                status = response.status
+
+                // 404 is acceptable: the service is reachable.
+                if (status < 500) {
+                    return {
+                        service: name,
+                        ready: true,
+                        status
+                    }
                 }
-            } catch (error) {
-                return {
-                    service: name,
-                    ready: false,
-                    error: error.message
-                }
+
+                error = `HTTP ${status}`
+
+            } catch (err) {
+                error = err.message
             }
-        })
+
+            if (attempt < 6) {
+                await wait(5000)
+            }
+        }
+
+        return {
+            service: name,
+            ready: false,
+            status,
+            error
+        }
+    }
+
+    const results = await Promise.all(
+        services.map(([name, url]) => checkService(name, url))
     )
 
     const allReady = results.every(service => service.ready)
@@ -67,6 +98,8 @@ app.get("/api/warmup", async (req, res) => {
         services: results
     })
 })
+
+
 
 
 app.use("/api/auth" , proxy(process.env.AUTH_SERVICE_URL))
